@@ -58,6 +58,13 @@ ROCKSDB_REMOTE_FILE=https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VER}.
 ROCKSDB_FILE=${ROCKSDB_PATH}.tar.gz
 ROCKSDB_LIBA=${ROCKSDB_PATH}/librocksdb.a
 
+#Kreon
+KREON_VER=
+KREON_PATH=${LIB_PATH}/kreon
+KREON_REMOTE_FILE=https://github.com/CARV-ICS-FORTH/kreon/archive/refs/heads/master.zip
+KREON_FILE=${KREON_PATH}.zip
+KREON_LIBA=${KREON_PATH}/build/kreon_lib/libkreon.a ${KREON_PATH}/build/_deps/log-build/liblog.a
+
 LEVELDB_VER=1.20
 LEVELDB_PATH=${LIB_PATH}/leveldb-${LEVELDB_VER}
 LEVELDB_FILE=${LEVELDB_PATH}.tar.gz
@@ -166,7 +173,7 @@ ifeq ($(uname_S),Linux)
 	CXXFLAGS+=-DCORO_ASM
 	CCFLAGS+=-DCORO_ASM
 	LIBS+=-lrt
-	CXXFLAGS+=-Werror
+
 else
 	MALLOC=libc
 	CXXFLAGS+=-DCORO_UCONTEXT -D_XOPEN_SOURCE
@@ -248,6 +255,13 @@ ifeq ($(storage_engine), rocksdb)
   LIBS:= ${ROCKSDB_LIBA} ${SNAPPY_LIBA} ${LIBS}
   CXXFLAGS+=-D__USE_ROCKSDB__ -std=c++11
 else
+ifeq ($(storage_engine), kreon)
+	STORAGE_ENGINE=$(KREON_LIBA)
+  	STORAGE_ENGINE_PATH=$(KREON_PATH)
+  	INCS+=-I${KREON_PATH}/kreon_lib -I${KREON_PATH}
+  	LIBS:= ${KREON_LIBA} ${SNAPPY_LIBA} ${LIBS}
+  	CXXFLAGS+=-D__USE_KREON__ -std=c++11
+else
 ifeq ($(storage_engine), wiredtiger)
   STORAGE_ENGINE=$(WIREDTIGER_LIBA)
   STORAGE_ENGINE_PATH=$(WIREDTIGER_PATH)
@@ -263,7 +277,8 @@ ifeq ($(storage_engine), perconaft)
   LIBS:= ${PERCONAFT_LIBA} ${PERCONAFT_LIBA2} ${SNAPPY_LIBA} ${LIBS} -lz -ldl
   CXXFLAGS+=-D__USE_PERCONAFT__
 else
-  $(error Only leveldb/lmdb/rocksdb/perconaft/wiredtiger/forestdb supported as env storage_engine value)
+  $(error Only leveldb/lmdb/rocksdb/perconaft/wiredtiger/forestdb/kreon supported as env storage_engine value)
+endif
 endif
 endif
 endif
@@ -282,7 +297,8 @@ endif
 
 #$(CORE_OBJECTS) $(SERVEROBJ) $(TESTOBJ): | $(ZOOKEEPER_PATH) $(STORAGE_ENGINE_PATH)
 
-all: ${PREBUILD}  test server tools
+# all: ${PREBUILD}  test server tools
+all:  test server tools
 
 $(STORAGE_ENGINE_OBJ): $(STORAGE_ENGINE)
 
@@ -344,6 +360,28 @@ ${SNAPPY_FILE}:
 	cd ${LIB_PATH} && \
 	wget -O ${SNAPPY_FILE} ${SNAPPY_REMOTE_FILE} && \
 	echo "<<<<< Done dowloading Snappy"
+	
+#Make Kreon
+.PHONY: kreon
+kreon: $(KREON_LIBA)
+$(KREON_LIBA): $(KREON_PATH)
+	echo ">>>>> Building KREON" && \
+	(cd ${KREON_PATH} && mkdir -p build && cd build && \
+	cmake ..  && make -j4 ) &&  \
+	echo "<<<<< Done building KREON"
+
+$(KREON_PATH): $(KREON_FILE)
+	echo ">>>>> Unpacking KREON" && \
+	cd ${LIB_PATH} && \
+	unzip -af ${KREON_FILE} && \
+	mv kreon-master kreon && \
+	echo "<<<<< Done unpacking KREON"
+
+${KREON_FILE}:
+	echo ">>>>> Dowloading KREON" && \
+	cd ${LIB_PATH} && \
+	wget -O ${KREON_FILE} ${KREON_REMOTE_FILE} && \
+	echo "<<<<< Done dowloading KREON"
 
 .PHONY: lmdb
 lmdb: $(LMDB_LIBA)
@@ -532,7 +570,7 @@ clean_test:
 
 clean_deps:
 	rm -rf $(LMDB_PATH) $(JEMALLOC_PATH) $(SNAPPY_PATH) $(LEVELDB_PATH) \
-		$(ROCKSDB_PATH) $(ZOOKEEPER_PATH)
+		$(ROCKSDB_PATH) $(ZOOKEEPER_PATH) $(KREON_PATH)
 	$(MAKE) -C $(LUA_PATH) clean
 
 noopt:

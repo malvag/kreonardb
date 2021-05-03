@@ -35,6 +35,9 @@ const char* ardb::g_engine_name = "lmdb";
 #elif defined __USE_ROCKSDB__
 #include "rocksdb/rocksdb_engine.hpp"
 const char* ardb::g_engine_name ="rocksdb";
+#elif defined __USE_KREON__
+#include "kreon/kreon_engine.hpp"
+const char* ardb::g_engine_name ="kreon";
 #elif defined __USE_FORESTDB__
 #include "forestdb/forestdb_engine.hpp"
 const char* ardb::g_engine_name ="forestdb";
@@ -68,6 +71,8 @@ Engine* create_engine()
     NEW(engine, WiredTigerEngine);
 #elif defined __USE_PERCONAFT__
     NEW(engine, PerconaFTEngine);
+#elif defined __USE_KREON__
+    NEW(engine, KreonEngine);
 #else
     ERROR_LOG("Unsupported storage engine specified at compile time.");
     return NULL;
