@@ -27,19 +27,19 @@
  *THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ROCKSDB_HPP_
-#define ROCKSDB_HPP_
+#ifndef KREON_HPP_
+#define KREON_HPP_
 
 #include "common/common.hpp"
 #include "thread/spin_rwlock.hpp"
 #include "thread/thread_mutex.hpp"
 #include "thread/thread_local.hpp"
-#include "kreon/kreon_lib/scanner/scanner.h"
-#include "kreon/kreon_lib/btree/btree.h"
-#include "kreon/kreon_lib/allocator/allocator.h"
+#include "btree/btree.h"
+#include "scanner/scanner.h"
+#include "allocator/allocator.h"
 #include "db/engine.hpp"
 #include <vector>
-#include <sparsehash/dense_hash_map>
+// #include <sparsehash/dense_hash_map>
 #include <memory>
 
 OP_NAMESPACE_BEGIN
@@ -70,7 +70,7 @@ OP_NAMESPACE_BEGIN
             {
                 m_valid = valid;
             }
-            void SetIterator(RocksIterData* iter);
+            void SetIterator(KreonIterData* iter);
             KeyObject& IterateUpperBoundKey()
             {
                 return m_iterate_upper_bound_key;
@@ -83,40 +83,32 @@ OP_NAMESPACE_BEGIN
             void JumpToLast();
             KeyObject& Key(bool clone_str);
             ValueObject& Value(bool clone_str);
-            Slice RawKey();
-            Slice RawValue();
             void Del();
-            ~RocksDBIterator();
+            ~KreonIterator();
     };
 
     class RocksDBCompactionFilter;
     class KreonEngine: public Engine
     {
         private:
-            typedef std::shared_ptr<rocksdb::ColumnFamilyHandle> ColumnFamilyHandlePtr;
-            typedef TreeMap<Data, ColumnFamilyHandlePtr>::Type ColumnFamilyHandleTable;
-            typedef TreeMap<uint32_t, Data>::Type ColumnFamilyHandleIDTable;
-            rocksdb::DB* m_db;
+            //typedef std::shared_ptr<rocksdb::ColumnFamilyHandle> ColumnFamilyHandlePtr;
+            //typedef TreeMap<Data, ColumnFamilyHandlePtr>::Type ColumnFamilyHandleTable;
+            //typedef TreeMap<uint32_t, Data>::Type ColumnFamilyHandleIDTable;
+            db_handle* m_db;
 
-            rocksdb::Options m_options;
+            //rocksdb::Options m_options;
             std::string m_dbdir;
-            ColumnFamilyHandleTable m_handlers;
+            //ColumnFamilyHandleTable m_handlers;
             SpinRWLock m_lock;
             ThreadMutex m_backup_lock;
-            bool m_bulk_loading;
-            bool disablewal;
 
-            ColumnFamilyHandlePtr GetColumnFamilyHandle(Context& ctx, const Data& name, bool create_if_noexist);
-
-            Data GetNamespaceByColumnFamilyId(uint32 id);
-            int ReOpen(rocksdb::Options& options);
+            //ColumnFamilyHandlePtr GetColumnFamilyHandle(Context& ctx, const Data& name, bool create_if_noexist);
+            friend class KreonIterator;
+            int ReOpen();
             void Close();
-            friend class RocksDBIterator;
-            friend class RocksDBCompactionFilter;
-            int DelKeySlice(rocksdb::WriteBatch* batch, rocksdb::ColumnFamilyHandle* cf, const rocksdb::Slice& key);
         public:
-            RocksDBEngine();
-            ~RocksDBEngine();
+            KreonEngine();
+            ~KreonEngine();
             int Init(const std::string& dir, const std::string& options);
             int Repair(const std::string& dir);
             int Put(Context& ctx, const KeyObject& key, const ValueObject& value);
@@ -124,8 +116,6 @@ OP_NAMESPACE_BEGIN
             int Get(Context& ctx, const KeyObject& key, ValueObject& value);
             int MultiGet(Context& ctx, const KeyObjectArray& keys, ValueObjectArray& values, ErrCodeArray& errs);
             int Del(Context& ctx, const KeyObject& key);
-            int DelKey(Context& ctx, const rocksdb::Slice& key);
-            int DelRange(Context& ctx, const KeyObject& start, const KeyObject& end);
             int Merge(Context& ctx, const KeyObject& key, uint16_t op, const DataArray& args);
             bool Exists(Context& ctx, const KeyObject& key,ValueObject& val);
             int BeginWriteBatch(Context& ctx);
@@ -137,18 +127,12 @@ OP_NAMESPACE_BEGIN
             void Stats(Context& ctx, std::string& str);
             int64_t EstimateKeysNum(Context& ctx, const Data& ns);
             Iterator* Find(Context& ctx, const KeyObject& key);
-            int Flush(Context& ctx, const Data& ns);
-            int BeginBulkLoad(Context& ctx);
-            int EndBulkLoad(Context& ctx);
             const std::string GetErrorReason(int err);
             int Backup(Context& ctx, const std::string& dir);
             int Restore(Context& ctx, const std::string& dir);
             const FeatureSet GetFeatureSet();
-            int Routine();
             int MaxOpenFiles();
-            EngineSnapshot CreateSnapshot();
-            void ReleaseSnapshot(EngineSnapshot s);
     };
 
 OP_NAMESPACE_END
-#endif /* SRC_ROCKSDB_HPP_ */
+#endif /* SRC_KREON_HPP_ */

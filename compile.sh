@@ -1,1 +1,1 @@
-storage_engine=kreon make server -j4
+storage_engine=kreon make server 

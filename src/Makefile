@@ -63,7 +63,7 @@ KREON_VER=
 KREON_PATH=${LIB_PATH}/kreon
 KREON_REMOTE_FILE=https://github.com/CARV-ICS-FORTH/kreon/archive/refs/heads/master.zip
 KREON_FILE=${KREON_PATH}.zip
-KREON_LIBA=${KREON_PATH}/build/kreon_lib/libkreon.a ${KREON_PATH}/build/_deps/log-build/liblog.a
+KREON_LIBA=../deps/kreon/build/kreon_lib/libkreon.a ../deps/kreon/build/_deps/log-build/liblog.a
 
 LEVELDB_VER=1.20
 LEVELDB_PATH=${LIB_PATH}/leveldb-${LEVELDB_VER}
@@ -258,9 +258,9 @@ else
 ifeq ($(storage_engine), kreon)
 	STORAGE_ENGINE=$(KREON_LIBA)
   	STORAGE_ENGINE_PATH=$(KREON_PATH)
-  	INCS+=-I${KREON_PATH}/kreon_lib -I${KREON_PATH}
+  	INCS+=-I../deps/kreon/ -I../deps/kreon/kreon_lib/
   	LIBS:= ${KREON_LIBA} ${SNAPPY_LIBA} ${LIBS}
-  	CXXFLAGS+=-D__USE_KREON__ -std=c++11
+  	CXXFLAGS+=-D__USE_KREON__
 else
 ifeq ($(storage_engine), wiredtiger)
   STORAGE_ENGINE=$(WIREDTIGER_LIBA)
@@ -311,7 +311,7 @@ $(DIST_LIBA):$(STORAGE_ENGINE_OBJ) $(CORE_OBJECTS)
 lib: $(DEP_LIBS) lua snappy sparsehash $(storage_engine) $(DIST_LIBA)
 
 server: lib $(CORE_OBJECTS) ${SERVEROBJ}
-	${ARDB_LD} -o ardb-server $(SERVEROBJ)  $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
+	${ARDB_LD} -o ardb-server $(SERVEROBJ) $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
 
 test: lib ${TESTOBJ} $(CORE_OBJECTS)
 	${ARDB_LD} -o ardb-test ${STORAGE_ENGINE_OBJ} ${TESTOBJ} $(CORE_OBJECTS) $(LIBS)
@@ -365,15 +365,16 @@ ${SNAPPY_FILE}:
 .PHONY: kreon
 kreon: $(KREON_LIBA)
 $(KREON_LIBA): $(KREON_PATH)
-	echo ">>>>> Building KREON" && \
-	(cd ${KREON_PATH} && mkdir -p build && cd build && \
-	cmake ..  && make -j4 ) &&  \
+	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.c
+	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.h
+	echo ">>>>> Building KREON"
+	cd ${KREON_PATH} && mkdir -p build && cd build && cmake ..  && make -j4
 	echo "<<<<< Done building KREON"
 
 $(KREON_PATH): $(KREON_FILE)
 	echo ">>>>> Unpacking KREON" && \
 	cd ${LIB_PATH} && \
-	unzip -af ${KREON_FILE} && \
+	unzip -a ${KREON_FILE} && \
 	mv kreon-master kreon && \
 	echo "<<<<< Done unpacking KREON"
 
@@ -587,5 +588,6 @@ dist:clean all
 clean:
 	rm -f  ${CORE_OBJECTS} $(SERVEROBJ) ${STORAGE_ENGINE_ALL_OBJ} ${TESTOBJ} ${REPAIR_TOOL_OBJ} ${DIST_LIBA} ${DIST_LIB} \
 	       ardb-test  ardb-server ardb-repair
+	rm -rf $(KREON_PATH) ${KREON_FILE} $(KREON_PATH)-master
 
 clobber: clean_deps clean

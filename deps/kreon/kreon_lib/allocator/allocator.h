@@ -32,7 +32,7 @@
 #include "../utilities/list.h"
 #include "../utilities/spin_loop.h"
 #include "../btree/conf.h"
-#define MAGIC_NUMBER 2036000000
+#define MAGIC_NUM 2036000000
 /*size in 4KB blocks of the log used for marking the free ops*/
 #define FREE_LOG_SIZE_IN_BLOCKS 512000
 

@@ -428,7 +428,7 @@ purpose*/
 	dev_superblock->dev_addressed_in_blocks = dev_addressed_in_blocks;
 	dev_superblock->unmapped_blocks = unmapped_blocks;
 	dev_superblock->system_catalogue = (pr_system_catalogue *)(offset);
-	dev_superblock->magic_number = MAGIC_NUMBER;
+	dev_superblock->magic_number = MAGIC_NUM;
 
 	if (lwrite(fd, (off_t)start, SEEK_SET, dev_superblock, sizeof(superblock)) == -1) {
 		log_fatal("code = %d,  ERROR = %s\n", errno, strerror(errno));
@@ -1365,7 +1365,7 @@ void allocator_init(volume_descriptor *volume_desc)
 	volume_desc->free_ops = 0;
 	volume_desc->log_size = FREE_LOG_SIZE_IN_BLOCKS * 4096;
 	struct superblock *b = (struct superblock *)MAPPED;
-	if (b->magic_number != MAGIC_NUMBER) {
+	if (b->magic_number != MAGIC_NUM) {
 		log_fatal("This volume %s does not seem to contain a valid instance. Issue "
 			  "mkfs command and retry",
 			  volume_desc->volume_id);
