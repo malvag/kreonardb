@@ -311,6 +311,7 @@ $(DIST_LIBA):$(STORAGE_ENGINE_OBJ) $(CORE_OBJECTS)
 lib: $(DEP_LIBS) lua snappy sparsehash $(storage_engine) $(DIST_LIBA)
 
 server: lib $(CORE_OBJECTS) ${SERVEROBJ}
+	echo ${STORAGE_ENGINE_OBJ}
 	${ARDB_LD} -o ardb-server $(SERVEROBJ) $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
 
 test: lib ${TESTOBJ} $(CORE_OBJECTS)

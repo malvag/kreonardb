@@ -1,5 +1,6 @@
 {
     "files.associations": {
         "random": "cpp"
-    }
+    },
+    "python.pythonPath": "/bin/python3.6"
 }
