@@ -48,6 +48,32 @@ OP_NAMESPACE_BEGIN
             }
     };
 
+    struct KreonDBLocalContext
+    {
+            Buffer encode_buffer_cache;
+            std::string string_cache;
+            std::vector<std::string> multi_string_cache;
+            typedef TreeMap<int, int>::Type ErrMap;
+            ErrMap err_map;
+            Buffer& GetEncodeBuferCache()
+            {
+                encode_buffer_cache.Clear();
+                return encode_buffer_cache;
+            }
+            std::string& GetStringCache()
+            {
+                string_cache.clear();
+                return string_cache;
+            }
+            std::vector<string>& GetMultiStringCache()
+            {
+                return multi_string_cache;
+            }
+    };
+
+    static ThreadLocal<KreonDBLocalContext> g_rocks_context;
+
+
     //static ThreadLocal<KreonLocalContext> g_rocks_context;
     //static RocksIteratorCache g_iter_cache;
 
@@ -69,7 +95,7 @@ OP_NAMESPACE_BEGIN
 
     void KreonEngine::Close()
     {
-        db_close(m_db);
+        //db_close(m_db);
     }
 
     int KreonEngine::Backup(Context& ctx, const std::string& dir)
@@ -86,8 +112,12 @@ OP_NAMESPACE_BEGIN
 
     int KreonEngine::ReOpen()
     {
-        Close();
-        char *volume_name = strdup("/tmp/kreon.dat");
+        if(m_db != NULL){
+            printf("Cant clonse \n");
+            Close();
+        }
+        
+        char *volume_name = strdup("/var/ardb/kreon.dat");
         char *db_name = strdup("test_ardb");
 	    int64_t device_size;
 	    FD = open(volume_name, O_RDWR);
@@ -100,7 +130,10 @@ OP_NAMESPACE_BEGIN
 	    	}
 	    }
 	    m_db = db_open(volume_name, (uint64_t)0, (uint64_t)device_size, db_name, CREATE_DB);
-        return 0;
+        if(m_db != NULL)
+            return 0;
+        else
+            return 1;
     }
 
     int KreonEngine::Init(const std::string& dir, const std::string& conf)
@@ -122,7 +155,30 @@ OP_NAMESPACE_BEGIN
 
     int KreonEngine::Put(Context& ctx, const KeyObject& key, const ValueObject& value)
     {
-        return 0;
+        printf("PUT");
+        KreonDBLocalContext& kreons_ctx = g_rocks_context.GetValue();
+        Buffer& encode_buffer = kreons_ctx.GetEncodeBuferCache();
+        key.Encode(encode_buffer);
+        size_t key_len = encode_buffer.ReadableBytes();
+        value.Encode(encode_buffer);
+        size_t value_len = encode_buffer.ReadableBytes() - key_len;
+        
+        void* key_data, * value_data;
+        uint32_t key_size,value_size;
+
+        key_data = const_cast<char*>(encode_buffer.GetRawBuffer());
+        key_size = key_len;
+        value_data = const_cast<char*>(encode_buffer.GetRawBuffer() + key_len);
+        value_size = value_len;
+
+        //Doesnt support batches (transcations) yet.
+
+        //prosexe ta return
+        if(insert_key_value(m_db, (void*) key_data , (void*) value_data , key_size , value_size) == SUCCESS)
+            return 0;
+        else
+            return 1;
+
     }
     int KreonEngine::MultiGet(Context& ctx, const KeyObjectArray& keys, ValueObjectArray& values, ErrCodeArray& errs)
     {
@@ -151,6 +207,32 @@ OP_NAMESPACE_BEGIN
 
     Iterator* KreonEngine::Find(Context& ctx, const KeyObject& key)
     {
+        printf("Find\n");
+        KreonIterator* iter = NULL;
+        NEW(iter, KreonIterator(this, key.GetNameSpace()));
+
+        KreonIterData* kreonsiter = NULL;
+        if (NULL == kreonsiter)
+        {
+            NEW(kreonsiter, KreonIterData);
+            kreonsiter->iter = (struct Kreoniterator*) malloc(sizeof(struct Kreoniterator));
+            
+            iter->SetIterator(kreonsiter);
+
+            if (key.GetType() > 0)
+            {
+                iter->Jump(key);
+            }
+            else
+            {
+                iter->JumpToFirst();
+            }
+            return iter;
+
+            //g_iter_cache.AddRunningIter(rocksiter);
+        }
+
+
         return NULL;
     }
 
@@ -201,7 +283,7 @@ OP_NAMESPACE_BEGIN
     const FeatureSet KreonEngine::GetFeatureSet()
     {
         FeatureSet features;
-        features.support_compactfilter = 0;
+        features.support_compactfilter = 1;
         features.support_namespace = 1;
         features.support_merge = 1;
         features.support_backup = 0;
@@ -214,11 +296,10 @@ OP_NAMESPACE_BEGIN
         return 1;
     }
 
-
-
     void KreonIterator::SetIterator(KreonIterData* iter)
     {
-        
+        m_iter = iter;
+        m_kreon_iter = m_iter->iter;
     }
 
     bool KreonIterator::Valid()
@@ -244,10 +325,12 @@ OP_NAMESPACE_BEGIN
     void KreonIterator::Jump(const KeyObject& next)
     {
         
+        Seek(m_engine->m_db,NULL, m_kreon_iter);
+        
     }
     void KreonIterator::JumpToFirst()
     {
-        
+        seek_to_first(m_engine->m_db,m_kreon_iter);
     }
     void KreonIterator::JumpToLast()
     {
@@ -272,6 +355,16 @@ OP_NAMESPACE_BEGIN
     {
 
     }
+
+    Slice KreonIterator::RawKey()
+    {
+        return NULL;
+    }
+    Slice KreonIterator::RawValue()
+    {
+        return NULL;
+    }
+
     
 OP_NAMESPACE_END
 

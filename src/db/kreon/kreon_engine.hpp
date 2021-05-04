@@ -87,6 +87,8 @@ OP_NAMESPACE_BEGIN
             KeyObject& Key(bool clone_str);
             ValueObject& Value(bool clone_str);
             void Del();
+            Slice RawKey();
+            Slice RawValue();
             ~KreonIterator();
     };
 
