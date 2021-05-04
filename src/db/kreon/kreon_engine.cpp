@@ -48,7 +48,7 @@ OP_NAMESPACE_BEGIN
             }
     };
 
-    struct KreonDBLocalContext
+    struct KreonLocalContext
     {
             Buffer encode_buffer_cache;
             std::string string_cache;
@@ -71,7 +71,7 @@ OP_NAMESPACE_BEGIN
             }
     };
 
-    static ThreadLocal<KreonDBLocalContext> g_rocks_context;
+    static ThreadLocal<KreonLocalContext> g_rocks_context;
 
 
     //static ThreadLocal<KreonLocalContext> g_rocks_context;
@@ -155,8 +155,7 @@ OP_NAMESPACE_BEGIN
 
     int KreonEngine::Put(Context& ctx, const KeyObject& key, const ValueObject& value)
     {
-        printf("PUT");
-        KreonDBLocalContext& kreons_ctx = g_rocks_context.GetValue();
+        KreonLocalContext& kreons_ctx = g_rocks_context.GetValue();
         Buffer& encode_buffer = kreons_ctx.GetEncodeBuferCache();
         key.Encode(encode_buffer);
         size_t key_len = encode_buffer.ReadableBytes();
@@ -173,12 +172,12 @@ OP_NAMESPACE_BEGIN
 
         //Doesnt support batches (transcations) yet.
 
+        printf("Inserting :%s , %d\n", key_data,key_size);
         //prosexe ta return
         if(insert_key_value(m_db, (void*) key_data , (void*) value_data , key_size , value_size) == SUCCESS)
             return 0;
         else
             return 1;
-
     }
     int KreonEngine::MultiGet(Context& ctx, const KeyObjectArray& keys, ValueObjectArray& values, ErrCodeArray& errs)
     {
@@ -186,6 +185,32 @@ OP_NAMESPACE_BEGIN
     }
     int KreonEngine::Get(Context& ctx, const KeyObject& key, ValueObject& value)
     {
+        KreonLocalContext& kreons_ctx = g_rocks_context.GetValue();
+        std::string& valstr = kreons_ctx.GetStringCache();
+        Buffer& key_encode_buffer = kreons_ctx.GetEncodeBuferCache();
+        key.Encode(key_encode_buffer);
+        int32_t key_size = key_encode_buffer.ReadableBytes();
+        void* key_data = const_cast<char*>(key_encode_buffer.GetRawBuffer());
+        char *key_buf = NULL;
+
+        void* retrieved_kv = find_key(m_db , (void*) key_data, key_size);
+        printf("key requested: %s %d\n", key_data, key_size);
+        //if(retrieved_kv == NULL){
+        //    return 1;
+        //}
+        
+        key_buf = (char*) (retrieved_kv + sizeof(uint32_t) );
+        key_size = *(uint32_t*) retrieved_kv;
+        uint32_t value_size = *(uint32_t*) ( retrieved_kv +  sizeof(uint32_t) + key_size );
+
+        printf("decoded key -> %s\n", key_buf);
+        printf("key size %d value size %d\n", key_size , value_size);
+
+        Buffer valBuffer((char*) (retrieved_kv + (2 * sizeof(uint32_t)) + key_size), 0, value_size);
+        value.Decode(valBuffer, true);
+        
+
+        // printf("%*s\n", value_size, value.());
         return 0;
     }
 

@@ -295,6 +295,7 @@ else
 endif
 #
 
+
 #$(CORE_OBJECTS) $(SERVEROBJ) $(TESTOBJ): | $(ZOOKEEPER_PATH) $(STORAGE_ENGINE_PATH)
 
 # all: ${PREBUILD}  test server tools
@@ -362,14 +363,14 @@ ${SNAPPY_FILE}:
 	echo "<<<<< Done dowloading Snappy"
 	
 #Make Kreon
+CMAKE = cmake
 .PHONY: kreon
 kreon: $(KREON_LIBA)
 $(KREON_LIBA): $(KREON_PATH)
-	
 	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.c
 	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.h
 	echo ">>>>> Building KREON"
-	CC=gcc-10.1.0 && cd ${KREON_PATH} && mkdir build && cd build && cmake3 ..  && $(MAKE) && CC=gcc
+	CC=gcc-10.1.0 && cd ${KREON_PATH} && mkdir build && cd build && ${CMAKE} ..  && $(MAKE) && CC=gcc
 	echo "<<<<< Done building KREON"
 
 $(KREON_PATH): $(KREON_FILE)

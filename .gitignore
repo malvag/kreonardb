@@ -1,6 +1,7 @@
 *.o
 *.so
 *.a
+.vscode/
 /.svn
 /.libs
 ardb-test*
