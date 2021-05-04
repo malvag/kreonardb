@@ -61,8 +61,8 @@ ROCKSDB_LIBA=${ROCKSDB_PATH}/librocksdb.a
 #Kreon
 KREON_VER=
 KREON_PATH=${LIB_PATH}/kreon
-KREON_REMOTE_FILE=https://github.com/CARV-ICS-FORTH/kreon/archive/refs/heads/master.zip
-KREON_FILE=${KREON_PATH}.zip
+KREON_REMOTE_FILE=https://github.com/CARV-ICS-FORTH/kreon.git
+KREON_FILE=${KREON_PATH}
 KREON_LIBA=../deps/kreon/build/kreon_lib/libkreon.a ../deps/kreon/build/_deps/log-build/liblog.a
 
 LEVELDB_VER=1.20
@@ -260,7 +260,7 @@ ifeq ($(storage_engine), kreon)
   	STORAGE_ENGINE_PATH=$(KREON_PATH)
   	INCS+=-I../deps/kreon/ -I../deps/kreon/kreon_lib/
   	LIBS:= ${KREON_LIBA} ${SNAPPY_LIBA} ${LIBS}
-  	CXXFLAGS+=-D__USE_KREON__
+  	CXXFLAGS+=-D__USE_KREON__ -std=c++11
 else
 ifeq ($(storage_engine), wiredtiger)
   STORAGE_ENGINE=$(WIREDTIGER_LIBA)
@@ -311,7 +311,6 @@ $(DIST_LIBA):$(STORAGE_ENGINE_OBJ) $(CORE_OBJECTS)
 lib: $(DEP_LIBS) lua snappy sparsehash $(storage_engine) $(DIST_LIBA)
 
 server: lib $(CORE_OBJECTS) ${SERVEROBJ}
-	echo ${STORAGE_ENGINE_OBJ}
 	${ARDB_LD} -o ardb-server $(SERVEROBJ) $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
 
 test: lib ${TESTOBJ} $(CORE_OBJECTS)
@@ -366,23 +365,25 @@ ${SNAPPY_FILE}:
 .PHONY: kreon
 kreon: $(KREON_LIBA)
 $(KREON_LIBA): $(KREON_PATH)
+	
 	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.c
 	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.h
 	echo ">>>>> Building KREON"
-	cd ${KREON_PATH} && mkdir -p build && cd build && cmake ..  && make -j4
+	CC=gcc-10.1.0 && cd ${KREON_PATH} && mkdir build && cd build && cmake3 ..  && $(MAKE) && CC=gcc
 	echo "<<<<< Done building KREON"
 
 $(KREON_PATH): $(KREON_FILE)
 	echo ">>>>> Unpacking KREON" && \
-	cd ${LIB_PATH} && \
-	unzip -a ${KREON_FILE} && \
-	mv kreon-master kreon && \
+	cd ${LIB_PATH}
+	#unzip -a ${KREON_FILE} && \
+	#mv kreon-master kreon && \
+
 	echo "<<<<< Done unpacking KREON"
 
 ${KREON_FILE}:
 	echo ">>>>> Dowloading KREON" && \
 	cd ${LIB_PATH} && \
-	wget -O ${KREON_FILE} ${KREON_REMOTE_FILE} && \
+	git clone ${KREON_REMOTE_FILE} && \
 	echo "<<<<< Done dowloading KREON"
 
 .PHONY: lmdb

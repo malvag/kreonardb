@@ -30,20 +30,21 @@
 #ifndef KREON_HPP_
 #define KREON_HPP_
 
-#include "db/engine.hpp"
+
 #include "common/common.hpp"
 #include "thread/spin_rwlock.hpp"
 #include "thread/thread_mutex.hpp"
 #include "thread/thread_local.hpp"
+#include "db/engine.hpp"
 #include <vector>
+//#include <sparsehash/dense_hash_map>
+#include <memory>
 extern "C"{
 #include <allocator/allocator.h>
 #include <btree/btree.h>
 #include <scanner/scanner.h>
 }
 
-// #include <sparsehash/dense_hash_map>
-#include <memory>
 
 OP_NAMESPACE_BEGIN
 
