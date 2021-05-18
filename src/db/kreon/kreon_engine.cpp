@@ -369,7 +369,11 @@ OP_NAMESPACE_BEGIN
 
     bool KreonIterator::Valid()
     {
-        return true;
+        if(m_kreon_iter != NULL && klc_is_valid(m_kreon_iter))
+            return true;
+        else 
+            return false;
+
     }
     void KreonIterator::ClearState()
     {
@@ -392,6 +396,13 @@ OP_NAMESPACE_BEGIN
     }
     void KreonIterator::Next()
     {
+        ClearState();
+        if (NULL == m_kreon_iter)
+        {
+            return;                                
+        }
+        klc_get_next(m_kreon_iter);
+        CheckBound();
         
     }
     void KreonIterator::Prev()
@@ -413,19 +424,14 @@ OP_NAMESPACE_BEGIN
         size_t key_len = encode_buffer.ReadableBytes();
         struct klc_key k;
         
-        k.data = const_cast<char*>(encode_buffer.GetRawBuffer());
+        k.data = (char*)(encode_buffer.GetRawBuffer());
         k.size = key_len;
 
 
         
         klc_seek(m_engine->m_db, &k, m_kreon_iter);
 
-        struct klc_key keyptr;
-        keyptr = klc_get_key(m_kreon_iter);
-
-        printf("%s %d %d\n", keyptr.data , keyptr.size, klc_is_valid(m_kreon_iter));
-
-        klc_close_scanner(m_kreon_iter);
+        //klc_close_scanner(m_kreon_iter);
         CheckBound();
     }
     void KreonIterator::JumpToFirst()
@@ -487,20 +493,32 @@ OP_NAMESPACE_BEGIN
     }
     KreonIterator::~KreonIterator()
     {
+        //if(m_kreon_iter)
         if(NULL != m_iter){
+            klc_close_scanner(m_kreon_iter);
             DELETE(m_iter);
         }
-        //klc_close_scanner(m_kreon_iter);
             
     }
 
     Slice KreonIterator::RawKey()
     {
-        return NULL;
+        if(m_kreon_iter == NULL)
+            return NULL;
+
+        struct klc_key k;
+        k = klc_get_key(m_kreon_iter);
+        return Slice((const char*) k.data , k.size);
+        
     }
     Slice KreonIterator::RawValue()
     {
-        return NULL;
+        if(m_kreon_iter == NULL)
+            return NULL;
+
+        struct klc_value v;
+        v = klc_get_value(m_kreon_iter);
+        return Slice((const char*) v.data, v.size);
     }
 
     
