@@ -32,12 +32,22 @@
 #include "db/db.hpp"
 #include "util/string_helper.hpp"
 
+extern "C"{
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+}
 OP_NAMESPACE_BEGIN
 
     struct KreonIterData
     {
             Data ns;
-            struct Kreoniterator* iter;
+            klc_scanner iter;
             KreonIterData()
                     : iter(NULL)
             {
@@ -117,19 +127,31 @@ OP_NAMESPACE_BEGIN
             Close();
         }
         
-        char *volume_name = strdup("/var/ardb/kreon.dat");
-        char *db_name = strdup("test_ardb");
-	    int64_t device_size;
-	    FD = open(volume_name, O_RDWR);
-	    if (ioctl(FD, BLKGETSIZE64, &device_size) == -1) {
-		device_size = lseek(FD, 0, SEEK_END);
-		    if (device_size == -1) {
-	    		// log_fatal("failed to determine volume size exiting...");
-	    		perror("ioctl");
-	    		exit(EXIT_FAILURE);
-	    	}
-	    }
-	    m_db = db_open(volume_name, (uint64_t)0, (uint64_t)device_size, db_name, CREATE_DB);
+        int64_t size;
+        int fd = open("/tmp/kreon.dat", O_RDWR);
+        if (fd == -1) {
+            perror("open");
+            exit(EXIT_FAILURE);                                            
+        }
+        size = lseek(fd, 0, SEEK_END);
+        if (size == -1) {
+            //log_fatal("failed to determine file size exiting...");
+            perror("ioctl");
+            exit(EXIT_FAILURE);                                                                
+        }
+        close(fd);
+        //log_info("Size is %lld", size);
+        //volume_init("/tmp/kreon.dat", 0, size, 1);
+        
+        klc_db_options db_option;
+        db_option.volume_size = size;
+        db_option.volume_name = strdup("/tmp/kreon.dat");
+        db_option.db_name = strdup("test_ardb");
+        db_option.volume_start = 0;
+        db_option.create_flag = KLC_CREATE_DB;
+
+	    
+        m_db = klc_open(&db_option);
         if(m_db != NULL)
             return 0;
         else
@@ -162,19 +184,15 @@ OP_NAMESPACE_BEGIN
         value.Encode(encode_buffer);
         size_t value_len = encode_buffer.ReadableBytes() - key_len;
         
-        void* key_data, * value_data;
-        uint32_t key_size,value_size;
+        struct klc_key_value kv;
+        
+        kv.k.data = const_cast<char*>(encode_buffer.GetRawBuffer());
+        kv.v.data = const_cast<char*>(encode_buffer.GetRawBuffer() + key_len);
+        kv.k.size = key_len;
+        kv.v.size = value_len;
+       
 
-        key_data = const_cast<char*>(encode_buffer.GetRawBuffer());
-        key_size = key_len;
-        value_data = const_cast<char*>(encode_buffer.GetRawBuffer() + key_len);
-        value_size = value_len;
-
-        //Doesnt support batches (transcations) yet.
-
-        printf("Inserting :%s , %d\n", key_data,key_size);
-        //prosexe ta return
-        if(insert_key_value(m_db, (void*) key_data , (void*) value_data , key_size , value_size) == SUCCESS)
+        if(klc_put(m_db, &kv) == KLC_SUCCESS)
             return 0;
         else
             return 1;
@@ -189,34 +207,38 @@ OP_NAMESPACE_BEGIN
         std::string& valstr = kreons_ctx.GetStringCache();
         Buffer& key_encode_buffer = kreons_ctx.GetEncodeBuferCache();
         key.Encode(key_encode_buffer);
-        int32_t key_size = key_encode_buffer.ReadableBytes();
-        void* key_data = const_cast<char*>(key_encode_buffer.GetRawBuffer());
+        
+        struct klc_key k;
+
+        k.size = key_encode_buffer.ReadableBytes();
+        k.data = const_cast<char*>(key_encode_buffer.GetRawBuffer());
         char *key_buf = NULL;
 
-        void* retrieved_kv = find_key(m_db , (void*) key_data, key_size);
-        printf("key requested: %s %d\n", key_data, key_size);
-        //if(retrieved_kv == NULL){
-        //    return 1;
-        //}
+
+        struct klc_value *v = NULL;
+        if(klc_get(m_db , &k, &v) != KLC_SUCCESS)
+            return ERR_ENTRY_NOT_EXIST;
         
-        key_buf = (char*) (retrieved_kv + sizeof(uint32_t) );
-        key_size = *(uint32_t*) retrieved_kv;
-        uint32_t value_size = *(uint32_t*) ( retrieved_kv +  sizeof(uint32_t) + key_size );
-
-        printf("decoded key -> %s\n", key_buf);
-        printf("key size %d value size %d\n", key_size , value_size);
-
-        Buffer valBuffer((char*) (retrieved_kv + (2 * sizeof(uint32_t)) + key_size), 0, value_size);
+        Buffer valBuffer( const_cast<char*>( v->data), 0, v->size);
         value.Decode(valBuffer, true);
         
-
-        // printf("%*s\n", value_size, value.());
         return 0;
+        
     }
 
 
     int KreonEngine::Del(Context& ctx, const KeyObject& key)
     {
+        KreonLocalContext& kreon_ctx = g_rocks_context.GetValue();
+        Buffer& key_encode_buffer = kreon_ctx.GetEncodeBuferCache();
+        key.Encode(key_encode_buffer);
+        size_t key_len = key_encode_buffer.ReadableBytes();
+        struct klc_key k;
+        k.data = const_cast<char*>(key_encode_buffer.GetRawBuffer());
+
+        if(klc_delete(m_db, &k) != KLC_SUCCESS)
+            return 1;
+
         return 0;
     }
 
@@ -232,33 +254,51 @@ OP_NAMESPACE_BEGIN
 
     Iterator* KreonEngine::Find(Context& ctx, const KeyObject& key)
     {
-        printf("Find\n");
+        //printf("Find\n");
+        
         KreonIterator* iter = NULL;
         NEW(iter, KreonIterator(this, key.GetNameSpace()));
+
+        if (key.GetType() > 0)
+        {
+            if (!ctx.flags.iterate_multi_keys)
+            {
+                if (!ctx.flags.iterate_no_upperbound)
+                {
+                    KeyObject& upperbound_key = iter->IterateUpperBoundKey();
+                    upperbound_key.SetNameSpace(key.GetNameSpace());
+                    if (key.GetType() == KEY_META)
+                    {
+                        upperbound_key.SetType(KEY_END);
+                    }else{
+                        upperbound_key.SetType(key.GetType() + 1);
+                    }
+                    upperbound_key.SetKey(key.GetKey());
+                    upperbound_key.CloneStringPart();
+                }
+            }
+        }
 
         KreonIterData* kreonsiter = NULL;
         if (NULL == kreonsiter)
         {
             NEW(kreonsiter, KreonIterData);
-            kreonsiter->iter = (struct Kreoniterator*) malloc(sizeof(struct Kreoniterator));
-            
-            iter->SetIterator(kreonsiter);
+            kreonsiter->iter = klc_init_scanner(m_db,NULL,KLC_FETCH_FIRST);
+            kreonsiter->ns.Clone(key.GetNameSpace());
+            kreonsiter->ns.ToMutableStr();
+        }    
+        iter->SetIterator(kreonsiter);
 
-            if (key.GetType() > 0)
-            {
-                iter->Jump(key);
-            }
-            else
-            {
-                iter->JumpToFirst();
-            }
-            return iter;
-
-            //g_iter_cache.AddRunningIter(rocksiter);
+        if (key.GetType() > 0)
+        {
+            iter->Jump(key);
         }
+        else
+        {
+            iter->JumpToFirst();
+        }
+        return iter;
 
-
-        return NULL;
     }
 
     int KreonEngine::BeginWriteBatch(Context& ctx)
@@ -333,11 +373,22 @@ OP_NAMESPACE_BEGIN
     }
     void KreonIterator::ClearState()
     {
-        
+        m_key.Clear();
+        m_value.Clear();
+        m_valid = true;
     }
     void KreonIterator::CheckBound()
     {
-        
+        if(NULL != m_kreon_iter && m_iterate_upper_bound_key.GetType() > 0)
+        {
+            if(klc_is_valid(m_kreon_iter))
+            {
+                if (Key(false).Compare(m_iterate_upper_bound_key) >= 0)
+                {
+                    m_valid = false;
+                }
+            }
+        }
     }
     void KreonIterator::Next()
     {
@@ -349,13 +400,44 @@ OP_NAMESPACE_BEGIN
     }
     void KreonIterator::Jump(const KeyObject& next)
     {
+        ClearState();
+
+        if(NULL == m_kreon_iter)
+            return;
+
+
+        KreonLocalContext& kreon_ctx = g_rocks_context.GetValue();
+        Buffer& encode_buffer = kreon_ctx.GetEncodeBuferCache();
+        next.Encode(encode_buffer, false);
+
+        size_t key_len = encode_buffer.ReadableBytes();
+        struct klc_key k;
         
-        Seek(m_engine->m_db,NULL, m_kreon_iter);
+        k.data = const_cast<char*>(encode_buffer.GetRawBuffer());
+        k.size = key_len;
+
+
         
+        klc_seek(m_engine->m_db, &k, m_kreon_iter);
+
+        struct klc_key keyptr;
+        keyptr = klc_get_key(m_kreon_iter);
+
+        printf("%s %d %d\n", keyptr.data , keyptr.size, klc_is_valid(m_kreon_iter));
+
+        klc_close_scanner(m_kreon_iter);
+        CheckBound();
     }
     void KreonIterator::JumpToFirst()
     {
-        seek_to_first(m_engine->m_db,m_kreon_iter);
+        /*ClearState();
+
+        if( NULL == m_kreon_iter ){
+            return;
+        }
+        m_kreon_iter = klc_init_scanner(m_engine->m_db, NULL , KLC_FETCH_FIRST);
+        klc_close_scanner(m_kreon_iter);
+     *///   seek_to_first(m_engine->m_db,m_kreon_iter);
     }
     void KreonIterator::JumpToLast()
     {
@@ -364,13 +446,40 @@ OP_NAMESPACE_BEGIN
 
     KeyObject& KreonIterator::Key(bool clone_str)
     {
-        KeyObject* tmp = new KeyObject();
-        return *tmp;
+        if (m_key.GetType() > 0)
+        {
+            if (clone_str && m_key.GetKey().IsCStr())
+            {
+                m_key.CloneStringPart();
+                                                        
+            }
+            return m_key;                                
+        }
+
+        struct klc_key keyptr;
+        keyptr = klc_get_key(m_kreon_iter);
+        Buffer kbuf(const_cast<char*>(keyptr.data), 0, keyptr.size); 
+        m_key.Decode(kbuf, clone_str);
+        m_key.SetNameSpace(m_ns);
+        return m_key;
+        //struct klc_key keyptr;
+        //keyptr = klc_get_key(m_kreon_iter)
     }
     ValueObject& KreonIterator::Value(bool clone_str)
     {
-        ValueObject* tmp = new ValueObject();
-        return *tmp;
+        if(m_value.GetType() > 0)
+        {
+            if(clone_str){
+                m_value.CloneStringPart();
+            }
+            return m_value;
+        }
+
+        struct klc_value valptr;
+        valptr = klc_get_value(m_kreon_iter);
+        Buffer vbuf(const_cast<char*>(valptr.data), 0 , valptr.size);
+        m_value.Decode(vbuf,clone_str);
+        return m_value;
     }
     void KreonIterator::Del()
     {
@@ -378,7 +487,11 @@ OP_NAMESPACE_BEGIN
     }
     KreonIterator::~KreonIterator()
     {
-
+        if(NULL != m_iter){
+            DELETE(m_iter);
+        }
+        //klc_close_scanner(m_kreon_iter);
+            
     }
 
     Slice KreonIterator::RawKey()

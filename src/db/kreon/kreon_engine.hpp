@@ -40,9 +40,15 @@
 //#include <sparsehash/dense_hash_map>
 #include <memory>
 extern "C"{
-#include <allocator/allocator.h>
-#include <btree/btree.h>
-#include <scanner/scanner.h>
+#include <kreon_lib/include/kreon.h>
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 }
 
 
@@ -59,7 +65,7 @@ OP_NAMESPACE_BEGIN
             KreonEngine* m_engine;
             //rocksdb::ColumnFamilyHandle* m_cf;
             KreonIterData* m_iter;
-            struct Kreoniterator* m_kreon_iter;
+            klc_scanner m_kreon_iter;
             KeyObject m_iterate_upper_bound_key;
             bool m_valid;
             void ClearState();
@@ -100,7 +106,7 @@ OP_NAMESPACE_BEGIN
             //typedef std::shared_ptr<rocksdb::ColumnFamilyHandle> ColumnFamilyHandlePtr;
             //typedef TreeMap<Data, ColumnFamilyHandlePtr>::Type ColumnFamilyHandleTable;
             //typedef TreeMap<uint32_t, Data>::Type ColumnFamilyHandleIDTable;
-            db_handle* m_db;
+            klc_handle m_db;
 
             //rocksdb::Options m_options;
             std::string m_dbdir;

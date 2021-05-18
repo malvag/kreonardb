@@ -1,2 +1,2 @@
-storage_engine=kreon make server
+storage_engine=kreon make  server
 ./src/ardb-server

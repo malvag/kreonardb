@@ -363,7 +363,7 @@ ${SNAPPY_FILE}:
 	echo "<<<<< Done dowloading Snappy"
 	
 #Make Kreon
-CMAKE = cmake
+CMAKE = cmake3
 .PHONY: kreon
 kreon: $(KREON_LIBA)
 $(KREON_LIBA): $(KREON_PATH)
