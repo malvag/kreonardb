@@ -41,6 +41,7 @@ extern "C"{
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <kreon_lib/scanner/scanner.h>
 }
 OP_NAMESPACE_BEGIN
 
@@ -54,7 +55,8 @@ OP_NAMESPACE_BEGIN
             }
             ~KreonIterData()
             {
-                DELETE(iter);
+                if(NULL != iter && klc_is_valid(iter))
+			klc_close_scanner(iter);
             }
     };
 
@@ -110,13 +112,11 @@ OP_NAMESPACE_BEGIN
 
     int KreonEngine::Backup(Context& ctx, const std::string& dir)
     {
-        printf("BACKUP\n");
         return ERR_NOTSUPPORTED;
     }
 
     int KreonEngine::Restore(Context& ctx, const std::string& dir)
     {
-        printf("RESTORE");
         return ERR_NOTSUPPORTED;
     }
 
@@ -128,7 +128,7 @@ OP_NAMESPACE_BEGIN
         }
         
         int64_t size;
-        int fd = open("/tmp/kreon.dat", O_RDWR);
+        int fd = open("/var/ardb/kreon.dat", O_RDWR);
         if (fd == -1) {
             perror("open");
             exit(EXIT_FAILURE);                                            
@@ -145,7 +145,7 @@ OP_NAMESPACE_BEGIN
         
         klc_db_options db_option;
         db_option.volume_size = size;
-        db_option.volume_name = strdup("/tmp/kreon.dat");
+        db_option.volume_name = strdup("/var/ardb/kreon.dat");
         db_option.db_name = strdup("test_ardb");
         db_option.volume_start = 0;
         db_option.create_flag = KLC_CREATE_DB;
@@ -254,8 +254,6 @@ OP_NAMESPACE_BEGIN
 
     Iterator* KreonEngine::Find(Context& ctx, const KeyObject& key)
     {
-        //printf("Find\n");
-        
         KreonIterator* iter = NULL;
         NEW(iter, KreonIterator(this, key.GetNameSpace()));
 
@@ -286,7 +284,11 @@ OP_NAMESPACE_BEGIN
             kreonsiter->iter = klc_init_scanner(m_db,NULL,KLC_FETCH_FIRST);
             kreonsiter->ns.Clone(key.GetNameSpace());
             kreonsiter->ns.ToMutableStr();
-        }    
+        }
+	if(!klc_is_valid(kreonsiter->iter)){
+		iter->MarkValid(false);
+		return iter;
+	}
         iter->SetIterator(kreonsiter);
 
         if (key.GetType() > 0)
@@ -407,6 +409,12 @@ OP_NAMESPACE_BEGIN
     }
     void KreonIterator::Prev()
     {
+	ClearState();
+	if(NULL == m_kreon_iter)
+		return;
+
+	klc_get_prev(m_kreon_iter);
+	//CheckBound();
         
     }
     void KreonIterator::Jump(const KeyObject& next)
@@ -427,8 +435,6 @@ OP_NAMESPACE_BEGIN
         k.data = (char*)(encode_buffer.GetRawBuffer());
         k.size = key_len;
 
-
-        
         klc_seek(m_engine->m_db, &k, m_kreon_iter);
 
         //klc_close_scanner(m_kreon_iter);
@@ -436,18 +442,22 @@ OP_NAMESPACE_BEGIN
     }
     void KreonIterator::JumpToFirst()
     {
-        /*ClearState();
+        ClearState();
 
         if( NULL == m_kreon_iter ){
             return;
         }
         m_kreon_iter = klc_init_scanner(m_engine->m_db, NULL , KLC_FETCH_FIRST);
-        klc_close_scanner(m_kreon_iter);
-     *///   seek_to_first(m_engine->m_db,m_kreon_iter);
+        //klc_close_scanner(m_kreon_iter);
+        //   seek_to_first(m_engine->m_db,m_kreon_iter);
     }
     void KreonIterator::JumpToLast()
     {
-       
+	ClearState();
+	if(NULL == m_kreon_iter)
+		return;
+
+	m_kreon_iter = klc_init_scanner(m_engine->m_db,NULL,KLC_FETCH_LAST);
     }
 
     KeyObject& KreonIterator::Key(bool clone_str)
@@ -495,7 +505,7 @@ OP_NAMESPACE_BEGIN
     {
         //if(m_kreon_iter)
         if(NULL != m_iter){
-            klc_close_scanner(m_kreon_iter);
+            //klc_close_scanner(m_kreon_iter);
             DELETE(m_iter);
         }
             
