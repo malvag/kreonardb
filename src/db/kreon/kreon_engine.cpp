@@ -43,6 +43,9 @@ extern "C"{
 #include <unistd.h>
 #include <kreon_lib/scanner/scanner.h>
 }
+
+std::string Kreon_volume_name;
+
 OP_NAMESPACE_BEGIN
 
     struct KreonIterData
@@ -128,7 +131,7 @@ OP_NAMESPACE_BEGIN
         }
         
         int64_t size;
-        int fd = open("/var/ardb/kreon.dat", O_RDWR);
+        int fd = open((const char*) Kreon_volume_name.c_str(), O_RDWR);
         if (fd == -1) {
             perror("open");
             exit(EXIT_FAILURE);                                            
@@ -142,10 +145,10 @@ OP_NAMESPACE_BEGIN
         close(fd);
         //log_info("Size is %lld", size);
         //volume_init("/tmp/kreon.dat", 0, size, 1);
-        
+       
         klc_db_options db_option;
         db_option.volume_size = size;
-        db_option.volume_name = strdup("/var/ardb/kreon.dat");
+        db_option.volume_name = strdup(Kreon_volume_name.c_str());
         db_option.db_name = strdup("test_ardb");
         db_option.volume_start = 0;
         db_option.create_flag = KLC_CREATE_DB;
@@ -160,6 +163,10 @@ OP_NAMESPACE_BEGIN
 
     int KreonEngine::Init(const std::string& dir, const std::string& conf)
     {
+	m_dbdir = dir;
+	printf("Opening Kreon volume at:>%s\n" , (m_dbdir.substr(0,m_dbdir.size() - 5) + "kreon.dat").c_str());
+	Kreon_volume_name = (m_dbdir.substr(0,m_dbdir.size() - 5 ) + "kreon.dat").c_str();
+
         return ReOpen();
     }
 
@@ -249,7 +256,7 @@ OP_NAMESPACE_BEGIN
 
     bool KreonEngine::Exists(Context& ctx, const KeyObject& key,ValueObject& val)
     {
-       return 0;
+	return 0 == Get(ctx,key,val);
     }
 
     Iterator* KreonEngine::Find(Context& ctx, const KeyObject& key)
@@ -478,8 +485,6 @@ OP_NAMESPACE_BEGIN
         m_key.Decode(kbuf, clone_str);
         m_key.SetNameSpace(m_ns);
         return m_key;
-        //struct klc_key keyptr;
-        //keyptr = klc_get_key(m_kreon_iter)
     }
     ValueObject& KreonIterator::Value(bool clone_str)
     {
@@ -503,9 +508,7 @@ OP_NAMESPACE_BEGIN
     }
     KreonIterator::~KreonIterator()
     {
-        //if(m_kreon_iter)
         if(NULL != m_iter){
-            //klc_close_scanner(m_kreon_iter);
             DELETE(m_iter);
         }
             
