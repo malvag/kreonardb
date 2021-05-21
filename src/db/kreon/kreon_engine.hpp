@@ -68,9 +68,10 @@ OP_NAMESPACE_BEGIN
             klc_scanner m_kreon_iter;
             KeyObject m_iterate_upper_bound_key;
             bool m_valid;
-            void ClearState();
-            void CheckBound();
         public:
+            void CheckBound();
+            void ClearState();
+            //klc_scanner m_kreon_iter;
             KreonIterator(KreonEngine* engine,const Data& ns) :
                     m_ns(ns), m_engine(engine),  m_iter(NULL),m_valid(true)
             {
@@ -80,11 +81,12 @@ OP_NAMESPACE_BEGIN
             {
                 m_valid = valid;
             }
-            void SetIterator(KreonIterData* iter);
+            void SetIterator(klc_scanner iter);
             KeyObject& IterateUpperBoundKey()
             {
                 return m_iterate_upper_bound_key;
             }
+            
             bool Valid();
             void Next();
             void Prev();

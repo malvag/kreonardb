@@ -59,7 +59,7 @@ OP_NAMESPACE_BEGIN
             ~KreonIterData()
             {
                 if(NULL != iter && klc_is_valid(iter))
-			klc_close_scanner(iter);
+			        klc_close_scanner(iter);
             }
     };
 
@@ -110,7 +110,7 @@ OP_NAMESPACE_BEGIN
 
     void KreonEngine::Close()
     {
-        //db_close(m_db);
+        klc_close(m_db);
     }
 
     int KreonEngine::Backup(Context& ctx, const std::string& dir)
@@ -144,7 +144,6 @@ OP_NAMESPACE_BEGIN
         }
         close(fd);
         //log_info("Size is %lld", size);
-        //volume_init("/tmp/kreon.dat", 0, size, 1);
        
         klc_db_options db_option;
         db_option.volume_size = size;
@@ -164,7 +163,6 @@ OP_NAMESPACE_BEGIN
     int KreonEngine::Init(const std::string& dir, const std::string& conf)
     {
 	m_dbdir = dir;
-	printf("Opening Kreon volume at:>%s\n" , (m_dbdir.substr(0,m_dbdir.size() - 5) + "kreon.dat").c_str());
 	Kreon_volume_name = (m_dbdir.substr(0,m_dbdir.size() - 5 ) + "kreon.dat").c_str();
 
         return ReOpen();
@@ -256,7 +254,7 @@ OP_NAMESPACE_BEGIN
 
     bool KreonEngine::Exists(Context& ctx, const KeyObject& key,ValueObject& val)
     {
-	return 0 == Get(ctx,key,val);
+	    return 0 == Get(ctx,key,val);
     }
 
     Iterator* KreonEngine::Find(Context& ctx, const KeyObject& key)
@@ -284,21 +282,8 @@ OP_NAMESPACE_BEGIN
             }
         }
 
-        KreonIterData* kreonsiter = NULL;
-        if (NULL == kreonsiter)
-        {
-            NEW(kreonsiter, KreonIterData);
-            kreonsiter->iter = klc_init_scanner(m_db,NULL,KLC_FETCH_FIRST);
-            kreonsiter->ns.Clone(key.GetNameSpace());
-            kreonsiter->ns.ToMutableStr();
-        }
-	if(!klc_is_valid(kreonsiter->iter)){
-		iter->MarkValid(false);
-		return iter;
-	}
-        iter->SetIterator(kreonsiter);
 
-        if (key.GetType() > 0)
+       if (key.GetType() > 0)
         {
             iter->Jump(key);
         }
@@ -370,10 +355,10 @@ OP_NAMESPACE_BEGIN
         return 1;
     }
 
-    void KreonIterator::SetIterator(KreonIterData* iter)
+    void KreonIterator::SetIterator(klc_scanner iter)
     {
-        m_iter = iter;
-        m_kreon_iter = m_iter->iter;
+        //m_iter = iter;
+        m_kreon_iter = iter;
     }
 
     bool KreonIterator::Valid()
@@ -428,10 +413,6 @@ OP_NAMESPACE_BEGIN
     {
         ClearState();
 
-        if(NULL == m_kreon_iter)
-            return;
-
-
         KreonLocalContext& kreon_ctx = g_rocks_context.GetValue();
         Buffer& encode_buffer = kreon_ctx.GetEncodeBuferCache();
         next.Encode(encode_buffer, false);
@@ -442,9 +423,8 @@ OP_NAMESPACE_BEGIN
         k.data = (char*)(encode_buffer.GetRawBuffer());
         k.size = key_len;
 
-        klc_seek(m_engine->m_db, &k, m_kreon_iter);
+        m_kreon_iter = klc_init_scanner(m_engine->m_db, &k, KLC_GREATER_OR_EQUAL);
 
-        //klc_close_scanner(m_kreon_iter);
         CheckBound();
     }
     void KreonIterator::JumpToFirst()
@@ -456,7 +436,7 @@ OP_NAMESPACE_BEGIN
         }
         m_kreon_iter = klc_init_scanner(m_engine->m_db, NULL , KLC_FETCH_FIRST);
         //klc_close_scanner(m_kreon_iter);
-        //   seek_to_first(m_engine->m_db,m_kreon_iter);
+           //seek_to_first(m_engine->m_db,m_kreon_iter);
     }
     void KreonIterator::JumpToLast()
     {
@@ -508,8 +488,8 @@ OP_NAMESPACE_BEGIN
     }
     KreonIterator::~KreonIterator()
     {
-        if(NULL != m_iter){
-            DELETE(m_iter);
+        if(m_kreon_iter != NULL){
+            klc_close_scanner(m_kreon_iter);
         }
             
     }
