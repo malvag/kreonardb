@@ -240,6 +240,7 @@ OP_NAMESPACE_BEGIN
         size_t key_len = key_encode_buffer.ReadableBytes();
         struct klc_key k;
         k.data = const_cast<char*>(key_encode_buffer.GetRawBuffer());
+	k.size = key_len;
 
         if(klc_delete(m_db, &k) != KLC_SUCCESS)
             return 1;
