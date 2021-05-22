@@ -413,6 +413,9 @@ OP_NAMESPACE_BEGIN
     {
         ClearState();
 
+	if(m_kreon_iter != NULL && klc_is_valid(m_kreon_iter))
+		klc_close_scanner(m_kreon_iter);
+
         KreonLocalContext& kreon_ctx = g_rocks_context.GetValue();
         Buffer& encode_buffer = kreon_ctx.GetEncodeBuferCache();
         next.Encode(encode_buffer, false);
